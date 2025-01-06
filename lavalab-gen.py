@@ -421,6 +421,11 @@ def main():
                 fcomponent.write("LOGLEVEL=%s\n" % loglevel)
                 fcomponent.close()
 
+    port_number_rule_needed = any(
+        "uart" in board and "port_number" in board["uart"] for board in workers["boards"]
+    )
+    ser2net_port_number_rule_needed = port_number_rule_needed
+
     default_slave = "lab-slave-0"
     if "slaves" not in workers:
         slaves = {}
@@ -639,6 +644,9 @@ def main():
                     udev_line += 'ATTRS{devpath}=="%s", ' % udev_dev["devpath"]
                 udev_line += 'MODE="0664", OWNER="uucp", SYMLINK+="%s"\n' % udev_dev["name"]
                 fudev = open("%s/99-lavaworker-udev.rules" % udevdir, "a")
+                if ser2net_port_number_rule_needed:
+                    fp.write('SUBSYSTEMS=="usb-serial", ENV{.ID_PORT}="$attr{port_number}"\n\n')
+                    ser2net_port_number_rule_needed = False
                 fudev.write(udev_line)
                 fudev.close()
                 if workername == worker["name"] and (not "bind_dev" in slave or not slave["bind_dev"]):
@@ -704,6 +712,7 @@ def main():
         boards = {}
     else:
         boards = workers["boards"]
+
     for board in boards:
         board_name = board["name"]
         if "slave" in board:
@@ -748,7 +757,7 @@ def main():
             device_line += "{% set no_kvm = True %}\n"
         udevdir = None
         if "uart" in board:
-            keywords_uart = [ "baud", "devpath", "env", "idproduct", "idvendor", "interfacenum", "ser2net_keepopen", "serial", "use_ser2net", "worker" ]
+            keywords_uart = [ "baud", "devpath", "env", "idproduct", "idvendor", "interfacenum", "ser2net_keepopen", "serial", "port_number", "use_ser2net", "worker" ]
             for keyword in board["uart"]:
                 if not keyword in keywords_uart:
                     print("WARNING: unknown keyword %s" % keyword)
@@ -769,6 +778,8 @@ def main():
                 udev_line += 'ATTRS{devpath}=="%s", ' % board["uart"]["devpath"]
             if "interfacenum" in uart:
                 udev_line += 'ENV{ID_USB_INTERFACE_NUM}=="%s", ' % board["uart"]["interfacenum"]
+            if "port_number" in uart:
+                udev_line += 'ENV{.ID_PORT}=="%d", ' % board["uart"]["port_number"]
             if "env" in uart:
                 for env in uart["env"]:
                     udev_line += 'ENV{%s}=="%s",' % (env, uart["env"][env])
@@ -825,6 +836,9 @@ def main():
             if not os.path.isdir(udevdir):
                 os.mkdir(udevdir)
             fp = open("%s/99-lavaworker-udev.rules" % udevdir, "a")
+            if port_number_rule_needed:
+                fp.write('SUBSYSTEMS=="usb-serial", ENV{.ID_PORT}="$attr{port_number}"\n\n')
+                port_number_rule_needed = False
             fp.write(udev_line)
             fp.close()
         if "connection_command" in board:

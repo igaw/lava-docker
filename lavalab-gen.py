@@ -673,6 +673,7 @@ def main():
             dockcomp["services"][name]["ports"].append("61950-62000:61950-62000")
             fp = open("%s/scripts/extra_actions" % workerdir, "a")
             # LAVA issue 585 need to remove /etc/nbd-server/config
+            fp.write("apt-get update\n")
             fp.write("apt-get -y install nbd-server && rm -f /etc/nbd-server/config\n")
             fp.close()
             os.chmod("%s/scripts/extra_actions" % workerdir, 0o755)
@@ -690,6 +691,7 @@ def main():
             fp = open("%s/scripts/extra_actions" % workerdir, "a")
             # LAVA check if this package is installed when doing NFS jobs
             # So we need to install it, even if it is not used
+            fp.write("apt-get update\n")
             fp.write("apt-get -y install nfs-kernel-server\n")
             fp.close()
             os.chmod("%s/scripts/extra_actions" % workerdir, 0o755)

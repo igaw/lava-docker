@@ -6,8 +6,9 @@ RUN if [ -e /etc/apt/sources.list.d/backports.list ] ;then sed -i 's,.*bullseye-
 RUN apt-get update
 
 # telnet is for using ser2net
+# gensio-bin provides tools for using gensio provided by ser2net
 # git is necessary for checkout tests
-RUN DEBIAN_FRONTEND=noninteractive apt-get -y install telnet git ser2net patch lavacli
+RUN DEBIAN_FRONTEND=noninteractive apt-get -y install telnet git ser2net patch lavacli gensio-bin
 RUN if [ $(uname -m) = amd64 -o $(uname -m) = x86_64 ];then apt-get -y install linux-image-amd64 ; fi
 
 COPY configs/lava-slave /etc/lava-dispatcher/lava-slave

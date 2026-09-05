@@ -1,0 +1,70 @@
+Skip fakeroot in cpio()/uncpio() when already running as real root
+
+fakeroot exists so a non-root build can fake device-node creation and
+arbitrary ownership inside an archive. This dispatcher container runs
+lava-run as real root already (confirmed: every dispatcher process is
+uid 0), so those syscalls already succeed for real -- fakeroot buys
+nothing here.
+
+It's also actively harmful: fakeroot's faked-sysv daemon busy-loops at
+~100% CPU in this environment on every cpio() and uncpio() call
+(reproduced directly, outside LAVA entirely: `find . -print0 |
+fakeroot-sysv cpio --create ...` against a 5GB tree never completed in
+20s on an otherwise-idle 4-core host). Confirmed live against a real
+qemu health check job (job 6, run with zero other jobs competing for
+CPU) still blowing append-overlays' 60s timeout on this alone. Worse,
+the orphaned faked-sysv process outlives the job that spawned it --
+subprocess.run() here has no timeout=, so LAVA's own action-level
+Timeout can raise past a blocked call without ever killing the child,
+permanently stealing a CPU core until the container restarts. This
+also explains jobs stuck "Running" forever with no abort at all: once
+enough orphaned faked-sysv processes accumulate, the dispatcher's own
+watchdog can't get scheduled to fire.
+
+--- a/lava_dispatcher/utils/compression.py	2026-09-05 19:21:42.762890930 +0000
++++ b/lava_dispatcher/utils/compression.py	2026-09-05 19:21:42.775877731 +0000
+@@ -133,7 +133,13 @@
+ def cpio(directory: str, filename: str) -> str:
+     which("cpio")
+     which("find")
+-    which("fakeroot")
++    # Real root can already create device nodes and set arbitrary
++    # ownership -- fakeroot is only needed (and only safe to rely on)
++    # for a non-root build. See lava-patch/0001-... for why this
++    # matters beyond redundancy in this image.
++    use_fakeroot = os.geteuid() != 0
++    if use_fakeroot:
++        which("fakeroot")
+ 
+     try:
+         find = subprocess.Popen(
+@@ -142,10 +148,9 @@
+             stdout=subprocess.PIPE,
+         )
+         with find:
+-            # Use fakeroot to allow creation of device nodes and preserve ownership
+             cpio = subprocess.run(
+                 args=(
+-                    "fakeroot",
++                    *(("fakeroot",) if use_fakeroot else ()),
+                     "cpio",
+                     "--create",
+                     "--null",
+@@ -171,12 +176,14 @@
+ 
+ def uncpio(filename: str, directory: str) -> None:
+     which("cpio")
+-    which("fakeroot")
++    # See cpio() above -- real root needs no faking.
++    use_fakeroot = os.geteuid() != 0
++    if use_fakeroot:
++        which("fakeroot")
+     try:
+-        # Use fakeroot to allow extraction of device nodes without root privileges
+         subprocess.run(
+             args=(
+-                "fakeroot",
++                *(("fakeroot",) if use_fakeroot else ()),
+                 "cpio",
+                 "--extract",
+                 "--make-directories",

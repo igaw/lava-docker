@@ -475,6 +475,11 @@ def main():
         dockcomp["services"][name]["volumes"] = [ ]
         dockcomp["services"][name]["environment"] = {}
         dockcomp["services"][name]["restart"] = 'unless-stopped'
+        # Docker hands containers the daemon's open files limit, which
+        # is ~1e9 when containerd runs with LimitNOFILE=infinity. faked
+        # (fakeroot, used by LAVA for every cpio/uncpio) walks all of
+        # them, which takes over a minute per call.
+        dockcomp["services"][name]["ulimits"] = { "nofile": { "soft": 1048576, "hard": 1048576 } }
         dockcomp["services"][name]["build"] = {}
         dockcomp["services"][name]["build"]["context"] = name
         if "build_args" in slave:

@@ -21,7 +21,8 @@ COPY groups/ /root/lava-groups/
 COPY tokens/ /root/lava-callback-tokens/
 COPY entrypoint.d/*sh /root/entrypoint.d/
 
-COPY settings.conf /etc/lava-server/
+COPY settings.conf /root/
+COPY lava-docker-entrypoint.sh /root/
 
 COPY lava-patch/ /root/lava-patch
 RUN cd /usr/lib/python3/dist-packages && for patch in $(ls /root/lava-patch/*patch| sort) ; do echo $patch && patch -p1 < $patch || exit $?;done
@@ -48,4 +49,5 @@ RUN sed -i 's,pidfile =.*,pidfile = "/run/lava-coordinator/lava-coordinator.pid"
 
 EXPOSE 3079 5555 5556
 
+ENTRYPOINT ["/root/lava-docker-entrypoint.sh"]
 CMD /root/entrypoint.sh && while [ true ];do sleep 365d; done
